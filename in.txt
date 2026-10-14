@@ -1,0 +1,1 @@
+here is a bunch of data and it is cool.       Notice     how        it  contains  a lot    of    repetitive      spaces       which      can be        easily   LZ4   compressed
