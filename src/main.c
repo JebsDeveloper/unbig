@@ -10,9 +10,16 @@
 // Next argument.
 enum {
     NEXTARG_NONE = 0,
-    NEXTARG_INPUT = 1,
-    NEXTARG_OUTPUT = 2,
-    NEXTARG_ALGORITHM = 3
+    NEXTARG_ALGORITHM = 1,
+    NEXTARG_INPUT = 2,
+    NEXTARG_OUTPUT = 3
+};
+
+// Compress/decompress/undefined.
+enum {
+    COMPRESSARG_UNDEFINED = 0,
+    COMPRESSARG_COMPRESS = 1,
+    COMPRESSARG_DECOMPRESS = 2,
 };
 
 int main(int argc, char* argv[]) {
@@ -34,22 +41,37 @@ int main(int argc, char* argv[]) {
     // of pacman and yay and their help menus and error messages. It's working so far.
 
     if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
-        printf("Usage:\n    unbig <args> <files>\nArgs:\n    unbig {-h, --help} Displays this help menu\n    unbig {-a, --algorithm} <files> Choses which compression algorithm to use.\n");
+        printf("Usage:\n"
+               "    unbig <args>\n"
+               "Args:\n"
+               "    unbig {-h, --help} Displays this help menu\n"
+               "    unbig {-a, --algorithm} <alg> Choses which compression algorithm to use.\n"
+               "          Algorithms:\n"
+               "              LZ4: {-lz4}\n"
+               "    unbig {-c, --compress} Choses to compress input to output.\n"
+               "    unbig {-d, --decompress} Choses to decompress input to output.\n"
+               "    unbig {-i, --input} <file> The file to use as input.\n"
+               "    unbig {-o, --output} <file> The file to use as output.\n");
+        
         return 0;
     }
 
-    // Value is 0 for decompress, 1 for compress, and 2 for unchosen, will be replaced with bitpacking.
-    uint8_t compress = 2;
+    // Plan B: will not be replaced by bitpacking. I tried it and it works but it increases
+    // speed by basically nothing and decreases memory usage by 3 bytes.
+    uint8_t compress = COMPRESSARG_UNDEFINED;
+    uint8_t next_arg = NEXTARG_NONE;
+
     uint8_t has_input = 0;
     uint8_t has_output = 0;
-    uint8_t next_arg = NEXTARG_NONE;
 
     const char* input_file_path;
     const char* output_file_path;
+
     uint8_t compression_algorithm = COMPRESS_NONE;
 
     // Parse the program arguments.
     for (uint8_t i = 1; i < argument_count; ++i) {
+        // If bit 0 and bit 1 are both set off, no argument is next, check for a flag.
         if (next_arg == NEXTARG_NONE) {
             if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--algorithm") == 0) {
                 next_arg = NEXTARG_ALGORITHM;
@@ -58,29 +80,17 @@ int main(int argc, char* argv[]) {
             } else if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) {
                 next_arg = NEXTARG_OUTPUT;
             } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--compress") == 0) {
-                compress = 1;
+                compress = COMPRESSARG_COMPRESS;
             } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--decompress") == 0) {
-                compress = 0;
+                compress = COMPRESSARG_DECOMPRESS;
             }
 
             continue;
         }
 
+        // Mask the next argument bits. In binary, 1 is 01 (algorithm), 2 is 10 (input), 3 is 11 (output).
+        // 00 is 0 but that is for none which is irrelevant.
         switch (next_arg) {
-            case NEXTARG_INPUT: {
-                input_file_path = argv[i];
-                has_input = 1;
-
-                next_arg = NEXTARG_NONE;
-                break;
-            }
-            case NEXTARG_OUTPUT: {
-                output_file_path = argv[i];
-                has_output = 1;
-
-                next_arg = NEXTARG_NONE;
-                break;
-            }
             case NEXTARG_ALGORITHM: {
                 if (strcmp(argv[i], "lz4") == 0) {
                     compression_algorithm = COMPRESS_LZ4;
@@ -89,21 +99,46 @@ int main(int argc, char* argv[]) {
                 next_arg = NEXTARG_NONE;
                 break;
             }
+            case NEXTARG_INPUT: {
+                input_file_path = argv[i];
+
+                has_input = 1;
+                next_arg = NEXTARG_NONE;
+
+                break;
+            }
+            case NEXTARG_OUTPUT: {
+                output_file_path = argv[i];
+
+                has_output = 1;
+                next_arg = NEXTARG_NONE;
+
+                break;
+            }
         }
     }
 
-    if (compress == 2) {
-        printf("error: compress or decompress flag not passed. Please pass argument -c (--compress) or -d (--decompress).\n");
+    // If the compress/decompress flag is still undefined, ther user didn't define
+    // whether to use compression or decompression on the files.
+    if (compress == COMPRESSARG_UNDEFINED) {
+        printf("error: compress or decompress flag not passed, please pass argument -c (--compress) or -d (--decompress)\n");
         return 0;
     }
 
+    if (compression_algorithm == COMPRESS_NONE && compress != COMPRESSARG_DECOMPRESS) {
+        printf("error: except for when decompressing, you must pass the algorithm to use\n");
+        return 0;
+    }
+
+    // No input file was defined by the user.
     if (has_input != 1) {
-        printf("error: no input file argument passed. Please pass -i (--input) and a valid input file.\n");
+        printf("error: no input file argument passed, please pass -i (--input) and a valid input file\n");
         return 0;
     }
 
+    // No output file was defined by user.
     if (has_output != 1) {
-        printf("error: no output file argument passed. Please pass -o (--output) and a unused name for output file.\n");
+        printf("error: no output file argument passed, please pass -o (--output) and a unused name for output file\n");
         return 0;
     }
 
@@ -123,10 +158,10 @@ int main(int argc, char* argv[]) {
 
     clock_t time_start = clock();
 
-    char* input_file_buffer;
-    uint64_t input_file_size = 0;
+    if (compress == COMPRESSARG_COMPRESS) {
+        char* input_file_buffer;
+        uint64_t input_file_size = 0;
 
-    if (compress == 1) {
         if (read_raw_file(input_file_path, &input_file_buffer, &input_file_size) != 0) {
             return 0;
         }
@@ -151,15 +186,44 @@ int main(int argc, char* argv[]) {
         clock_t time_end = clock();
         double time_used = ((double) (time_end - time_start)) / CLOCKS_PER_SEC;
 
-        // Sorry for the really long line, I think multiple printfs are slower and I could just new line for every
-        // argument but I like this. You can see basically what it does here, just not how the values are caluclated.
-        printf("unbig: compression successful.\nCompression Percentage: %.2f.\nSize: %llu KB -> %llu KB.\nAlgorithm Used: %s.\nTime Taken: %.3f.\n", 1 - (header.compressed_data_size / input_file_size) * 100, input_file_size / 1024, header.compressed_data_size / 1024, compression_algorithm_string, time_used);
-    } else if (compress == 0) {
+        printf("unbig: compression successful.\n"
+               "Compression Percentage: %.2f%%.\n"
+               "Size: %.2f KB -> %.2f KB.\n"
+               "Algorithm Used: %s.\n"
+               "Time Taken: %.3f.\n"
+               "Input File: '%s'.\n"
+               "Output File: '%s'.\n",
+               (1 - (float) header.compressed_data_size / (float) input_file_size) * 100,
+               (float) input_file_size / 1024,
+               (float) header.compressed_data_size / 1024,
+               compression_algorithm_string,
+               time_used, 
+               input_file_path, 
+               output_file_path);
+
+        free(input_file_buffer);
+    } else if (compress == COMPRESSARG_DECOMPRESS) {
         FileHeader header;
         char* compressed_data;
 
         if (read_file(input_file_path, &header, &compressed_data) != 0) {
             return 0;
+        }
+
+        if (compression_algorithm == COMPRESS_NONE) {
+            compression_algorithm = header.compression_algorithm;
+            
+            switch (compression_algorithm) {
+                case COMPRESS_LZ4: {
+                    compression_algorithm_string = "LZ4";
+                    break;
+                }
+                default:
+                case COMPRESS_NONE: {
+                    compression_algorithm_string = "None";
+                    break;
+                }
+            }
         }
 
         char* decompressed_output;
@@ -177,8 +241,25 @@ int main(int argc, char* argv[]) {
         if (write_raw_file(output_file_path, &decompressed_output, header.decompressed_data_size) != 0) {
             return 0;
         }
+
+        clock_t time_end = clock();
+        double time_used = ((double) (time_end - time_start)) / CLOCKS_PER_SEC;
+
+        printf("unbig: decompression successful.\n"
+            "Size: %.2f KB.\n"
+            "Algorithm Used: %s.\n"
+            "Time Taken: %.3f.\n"
+            "Input File: '%s'.\n"
+            "Output File: '%s'.\n",
+            (float) header.decompressed_data_size / 1024,
+            compression_algorithm_string,
+            time_used,
+            input_file_path,
+            output_file_path);
+
+        free(compressed_data);
+        free(decompressed_output);
     }
 
-    free(input_file_buffer);
     return 0;
 }
