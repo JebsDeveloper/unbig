@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "utils.h"
 
 typedef struct {
     char magic[4];
@@ -11,8 +12,8 @@ typedef struct {
     uint8_t compression_algorithm;
 } FileHeader;
 
-uint8_t read_raw_file(const char* path, char** out, uint64_t* out_size);
-uint8_t write_raw_file(const char* path, char** in, uint64_t size);
+uint8_t read_raw_file(const char* path, Buffer* buffer);
+uint8_t write_raw_file(const char* path, Buffer* buffer);
 
 uint8_t write_file(const char* path, FileHeader header, char* compressed_data);
 uint8_t read_file(const char* path, FileHeader* header, char** out);

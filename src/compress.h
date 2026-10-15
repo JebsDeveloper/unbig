@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "utils.h"
 
 // Compression algorithms.
 enum {
@@ -12,5 +13,5 @@ enum {
 // The LZ4 folder in include is a clone of the GitHub repository:
 // https://github.com/lz4/lz4
 
-uint8_t compress_lz4(char* in, char** out, uint64_t in_size, uint64_t* out_size);
-uint8_t decompress_lz4(char* in, char** out, uint64_t compressed_size, uint64_t decompressed_size);
+uint8_t compress_lz4(Buffer* in, Buffer* out);
+uint8_t decompress_lz4(Buffer* in, Buffer* out);

@@ -159,19 +159,18 @@ int main(int argc, char* argv[]) {
     clock_t time_start = clock();
 
     if (compress == COMPRESSARG_COMPRESS) {
-        char* input_file_buffer;
-        uint64_t input_file_size = 0;
+        Buffer input_file = {};
 
-        if (read_raw_file(input_file_path, &input_file_buffer, &input_file_size) != 0) {
+        if (read_raw_file(input_file_path, &input_file) != 0) {
             return 0;
         }
 
-        FileHeader header = {{'U', 'B', 'I', 'G'}, 0, input_file_size, compression_algorithm};
-        char* compressed_input_data;
+        FileHeader header = {{'U', 'B', 'I', 'G'}, 0, input_file.size, compression_algorithm};
+        Buffer compressed_data = {};
 
         switch (compression_algorithm) {
             case COMPRESS_LZ4: {
-                if (compress_lz4(input_file_buffer, &compressed_input_data, input_file_size, &header.compressed_data_size) != 0) {
+                if (compress_lz4(&input_file, &compressed_data) != 0) {
                     return 0;
                 }
 
@@ -179,7 +178,12 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (write_file(output_file_path, header, compressed_input_data) != 0) {
+        header.compressed_data_size = compressed_data.size;
+
+        if (write_file(output_file_path, header, compressed_data.buffer) != 0) {
+            free(compressed_data.buffer);
+            free(input_file.buffer);
+
             return 0;
         }
 
@@ -193,22 +197,25 @@ int main(int argc, char* argv[]) {
                "Time Taken: %.3f.\n"
                "Input File: '%s'.\n"
                "Output File: '%s'.\n",
-               (1 - (float) header.compressed_data_size / (float) input_file_size) * 100,
-               (float) input_file_size / 1024,
+               (1 - (float) header.compressed_data_size / (float) input_file.size) * 100,
+               (float) input_file.size / 1024,
                (float) header.compressed_data_size / 1024,
                compression_algorithm_string,
                time_used, 
                input_file_path, 
                output_file_path);
 
-        free(input_file_buffer);
+        free(input_file.buffer);
+        free(compressed_data.buffer);
     } else if (compress == COMPRESSARG_DECOMPRESS) {
         FileHeader header;
-        char* compressed_data;
+        Buffer compressed_data = {};
 
-        if (read_file(input_file_path, &header, &compressed_data) != 0) {
+        if (read_file(input_file_path, &header, &compressed_data.buffer) != 0) {
             return 0;
         }
+
+        compressed_data.size = header.compressed_data_size;
 
         if (compression_algorithm == COMPRESS_NONE) {
             compression_algorithm = header.compression_algorithm;
@@ -226,11 +233,13 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        char* decompressed_output;
+        Buffer decompressed_output = {};
+        decompressed_output.size = header.decompressed_data_size;
 
         switch (compression_algorithm) {
             case COMPRESS_LZ4: {
-                if (decompress_lz4(compressed_data, &decompressed_output, header.compressed_data_size, header.decompressed_data_size) != 0) {
+                if (decompress_lz4(&compressed_data, &decompressed_output) != 0) {
+                    free(compressed_data.buffer);
                     return 0;
                 }
 
@@ -238,7 +247,10 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (write_raw_file(output_file_path, &decompressed_output, header.decompressed_data_size) != 0) {
+        if (write_raw_file(output_file_path, &decompressed_output) != 0) {
+            free(decompressed_output.buffer);
+            free(compressed_data.buffer);
+
             return 0;
         }
 
@@ -257,8 +269,8 @@ int main(int argc, char* argv[]) {
             input_file_path,
             output_file_path);
 
-        free(compressed_data);
-        free(decompressed_output);
+        free(decompressed_output.buffer);
+        free(compressed_data.buffer);
     }
 
     return 0;

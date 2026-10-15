@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-uint8_t read_raw_file(const char* path, char** out, uint64_t* out_size) {
+uint8_t read_raw_file(const char* path, Buffer* buffer) {
     // Open the file in binary read mode.
     FILE* file = fopen(path, "rb");
 
@@ -29,7 +29,7 @@ uint8_t read_raw_file(const char* path, char** out, uint64_t* out_size) {
         return 1;
     }
 
-    *out_size = size;
+    buffer->size = size;
 
     if (fseek(file, 0L, SEEK_SET) != 0) {
         printf("error: failed to seek beginning of file '%s'.\n", path);
@@ -38,19 +38,19 @@ uint8_t read_raw_file(const char* path, char** out, uint64_t* out_size) {
         return 1;
     }
 
-    *out = (char*) malloc((size_t) size);
+    buffer->buffer = (char*) malloc((size_t) size);
 
-    if (*out == NULL) {
+    if (buffer->buffer == NULL) {
         printf("error: failed to allocate %llu bytes of memory for file '%s'.\n", size, path);
         fclose(file);
 
         return 1;
     }
 
-    if (fread(*out, size, 1, file) != 1) {
+    if (fread(buffer->buffer, size, 1, file) != 1) {
         printf("error: failed to read %llu bytes of data from file '%s'.\n", size, path);
 
-        free(*out);
+        free(buffer->buffer);
         fclose(file);
             
         return 1;
@@ -60,7 +60,7 @@ uint8_t read_raw_file(const char* path, char** out, uint64_t* out_size) {
     return 0;
 }
 
-uint8_t write_raw_file(const char* path, char** in, uint64_t size) {
+uint8_t write_raw_file(const char* path, Buffer* buffer) {
     // Open the file in binary write mode.
     FILE* file = fopen(path, "wb");
 
@@ -71,7 +71,7 @@ uint8_t write_raw_file(const char* path, char** in, uint64_t size) {
 
     // fwrite should return exactly what was passed in its 3rd parameter because it
     // is how many times that data has been written to the file.
-    if (fwrite(*in, size, 1, file) != 1) {
+    if (fwrite(buffer->buffer, buffer->size, 1, file) != 1) {
         printf("error: failed to write compressed data to file '%s'.\n", path);
         fclose(file);
 
@@ -140,6 +140,8 @@ uint8_t read_file(const char* path, FileHeader* header, char** out) {
 
     if (fread(*out, header->compressed_data_size, 1, file) != 1) {
         printf("error: failed to read compressed data from file '%s'.\n", path);
+
+        free(*out);
         fclose(file);
 
         return 1;
