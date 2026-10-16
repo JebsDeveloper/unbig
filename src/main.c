@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <time.h>
 
 #include "compress.h"
@@ -12,7 +13,8 @@ enum {
     NEXTARG_NONE = 0,
     NEXTARG_ALGORITHM = 1,
     NEXTARG_INPUT = 2,
-    NEXTARG_OUTPUT = 3
+    NEXTARG_OUTPUT = 3,
+    NEXTARG_MEMORY = 4
 };
 
 // Compress/decompress/undefined.
@@ -57,12 +59,14 @@ int main(int argc, char* argv[]) {
     }
 
     // Plan B: will not be replaced by bitpacking. I tried it and it works but it increases
-    // speed by basically nothing and decreases memory usage by 3 bytes.
+    // speed by basically nothing and only decreases memory usage by 3 bytes.
     uint8_t compress = COMPRESSARG_UNDEFINED;
     uint8_t next_arg = NEXTARG_NONE;
 
     uint8_t has_input = 0;
     uint8_t has_output = 0;
+
+    uint64_t max_memory = 0;
 
     const char* input_file_path;
     const char* output_file_path;
@@ -79,6 +83,8 @@ int main(int argc, char* argv[]) {
                 next_arg = NEXTARG_INPUT;
             } else if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) {
                 next_arg = NEXTARG_OUTPUT;
+            } else if (strcmp(argv[i], "-m") == 0 || strcmp(argv[i], "--max-memory") == 0) {
+                next_arg = NEXTARG_MEMORY;
             } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--compress") == 0) {
                 compress = COMPRESSARG_COMPRESS;
             } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--decompress") == 0) {
@@ -88,8 +94,6 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        // Mask the next argument bits. In binary, 1 is 01 (algorithm), 2 is 10 (input), 3 is 11 (output).
-        // 00 is 0 but that is for none which is irrelevant.
         switch (next_arg) {
             case NEXTARG_ALGORITHM: {
                 if (strcmp(argv[i], "lz4") == 0) {
@@ -113,6 +117,24 @@ int main(int argc, char* argv[]) {
                 has_output = 1;
                 next_arg = NEXTARG_NONE;
 
+                break;
+            }
+            case NEXTARG_MEMORY: {
+                char* endptr;
+                errno = 0;
+
+                // Base 10 (3rd parameter) indicates decimal (normal integers, not hex or anything else).
+                unsigned long long max_memory_ull = strtoull(argv[i], &endptr, 10);
+
+                if (endptr == argv[i]) {
+                    printf("error: no digits found in '%s' after flag {-m, --max-memory}", argv[i]);
+                    return 0;
+                } else if (errno == ERANGE) {
+                    printf("error: value provided as flag {-m, --max-memory} is out of range of ull");
+                    return 0;
+                }
+
+                max_memory = (uint64_t) max_memory_ull;
                 break;
             }
         }

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "utils.h"
 
+#pragma pack(push, 1)
 typedef struct {
     char magic[4];
 
@@ -11,6 +12,7 @@ typedef struct {
 
     uint8_t compression_algorithm;
 } FileHeader;
+#pragma pack(pop)
 
 uint8_t read_raw_file(const char* path, Buffer* buffer);
 uint8_t write_raw_file(const char* path, Buffer* buffer);

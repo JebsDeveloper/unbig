@@ -15,3 +15,5 @@ enum {
 
 uint8_t compress_lz4(Buffer* in, Buffer* out);
 uint8_t decompress_lz4(Buffer* in, Buffer* out);
+
+uint8_t stream_compress_lz4(const char* input_file, const char* output_file);

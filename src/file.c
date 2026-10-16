@@ -23,7 +23,7 @@ uint8_t read_raw_file(const char* path, Buffer* buffer) {
     int64_t size = ftell(file);
 
     if (size < 0) {
-        printf("error: failed to get size (return value %lld) of file '%s'.\n", size, path);
+        printf("error: failed to get size (return value %lld) of file '%s'.\n", (long long int) size, path);
         fclose(file);
 
         return 1;
@@ -41,14 +41,14 @@ uint8_t read_raw_file(const char* path, Buffer* buffer) {
     buffer->buffer = (char*) malloc((size_t) size);
 
     if (buffer->buffer == NULL) {
-        printf("error: failed to allocate %llu bytes of memory for file '%s'.\n", size, path);
+        printf("error: failed to allocate %llu bytes of memory for file '%s'.\n", (long long unsigned int) size, path);
         fclose(file);
 
         return 1;
     }
 
     if (fread(buffer->buffer, size, 1, file) != 1) {
-        printf("error: failed to read %llu bytes of data from file '%s'.\n", size, path);
+        printf("error: failed to read %llu bytes of data from file '%s'.\n", (long long unsigned int) size, path);
 
         free(buffer->buffer);
         fclose(file);
@@ -132,7 +132,7 @@ uint8_t read_file(const char* path, FileHeader* header, char** out) {
     *out = (char*) malloc((size_t) header->compressed_data_size);
 
     if (*out == NULL) {
-        printf("error: failed to allocate %llu bytes of memory.\n", header->compressed_data_size);
+        printf("error: failed to allocate %llu bytes of memory.\n", (long long unsigned int) header->compressed_data_size);
         fclose(file);
 
         return 1;
